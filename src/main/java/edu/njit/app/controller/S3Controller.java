@@ -19,7 +19,7 @@ public class S3Controller {
     }
 
     @GetMapping("/{fileId}")
-    public ResponseEntity<Mono<byte[]>> getAllCourse(@PathVariable String fileId) {
+    public ResponseEntity<String> getAllCourse(@PathVariable String fileId) {
         return ResponseEntity.ok().body(this.service.getImageTest(fileId));
     }
 }
