@@ -1,28 +1,29 @@
 package edu.njit.app.service;
 
-import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.AWSStaticCredentialsProvider;
-import com.amazonaws.auth.BasicAWSCredentials;
-import com.amazonaws.auth.EnvironmentVariableCredentialsProvider;
+import com.amazonaws.auth.*;
 import com.amazonaws.regions.Regions;
-import com.amazonaws.services.rekognition.AmazonRekognitionClient;
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-import com.amazonaws.services.rekognition.AmazonRekognitionClientBuilder;
 import com.amazonaws.services.s3.model.Bucket;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
+import software.amazon.awssdk.core.SdkBytes;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.rekognition.RekognitionClient;
+import software.amazon.awssdk.services.rekognition.model.DetectLabelsRequest;
+import software.amazon.awssdk.services.rekognition.model.DetectLabelsResponse;
+import software.amazon.awssdk.services.rekognition.model.Image;
+import software.amazon.awssdk.services.rekognition.model.Label;
 
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.util.List;
 
 @Service
 public class S3Service {
 
-    public Mono<byte[]> getImageTest(String fileId) {
+    public String getImageTest(String fileId) {
         WebClient webClient = WebClient.builder()
                 .build();
         Mono<byte[]> bytes = webClient.get()
@@ -34,22 +35,21 @@ public class S3Service {
                 .accept(MediaType.APPLICATION_OCTET_STREAM)
                 .retrieve()
                 .bodyToMono(byte[].class);
-        uploadToS3(bytes.block());
-        return bytes;
+        recognizeCar(bytes.block());
+        return "Hi";
     }
 
-    private void uploadToS3(byte[] bytes) {
+    private void recognizeCar(byte[] bytes) {
         AmazonS3 s3client = AmazonS3ClientBuilder
                 .standard()
                 .withCredentials(new EnvironmentVariableCredentialsProvider())
                 .withRegion(Regions.US_WEST_2)
                 .build();
 
-
         String bucketName = "images-cc-assignment-1";
 
         if (s3client.doesBucketExist(bucketName)) {
-            System.out.println("Bucket does not exist");
+            System.out.println("Bucket exists.");
         }
 
         List<Bucket> buckets = s3client.listBuckets();
@@ -57,14 +57,31 @@ public class S3Service {
             System.out.println(bucket.getName());
         }
 
-//        InputStream targetStream = new ByteArrayInputStream(bytes);
-//        s3client.putObject("images-cc-assignment-1", "1.jpg", targetStream, null);
-//
-//
-//
-//        AmazonRekognitionClient rekognitionClient = AmazonRekognitionClientBuilder
-//                .standard()
-//                .withCredentials(new AWSStaticCredentialsProvider(credentials))
+        ByteBuffer byteBuffer = ByteBuffer.wrap(bytes);
+
+        Image image = Image
+                .builder()
+                .bytes(SdkBytes.fromByteBuffer(byteBuffer))
+                .build();
+
+        DetectLabelsRequest detectLabelsRequest = DetectLabelsRequest.builder()
+                .image(image)
+                .maxLabels(10)
+                .build();
+
+        RekognitionClient rekClient = RekognitionClient
+                .builder()
+                .region(Region.US_WEST_2)
+                .build();
+
+
+        DetectLabelsResponse labelsResponse = rekClient.detectLabels(detectLabelsRequest);
+        List<Label> labels = labelsResponse.labels();
+
+        System.out.println("Detected labels for the given photo");
+        for (Label label: labels) {
+            System.out.println(label.name() + ": " + label.confidence().toString());
+        }
 
     }
 }
